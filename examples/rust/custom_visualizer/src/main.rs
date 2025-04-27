@@ -9,6 +9,7 @@ use rerun::external::{
 };
 
 mod fractal_archetype;
+mod fractal_renderer;
 mod fractal_visualizer;
 
 // By using `re_memory::AccountingAllocator` Rerun can keep track of exactly how much memory it is using,

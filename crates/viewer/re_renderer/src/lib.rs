@@ -63,6 +63,11 @@ pub use context::{
 };
 pub use debug_label::DebugLabel;
 pub use depth_offset::DepthOffset;
+pub use draw_phases::{
+    DrawPhase, OutlineConfig, OutlineMaskPreference, PickingLayerId, PickingLayerInstanceId,
+    PickingLayerObjectId, PickingLayerProcessor, ScreenshotProcessor,
+};
+pub use global_bindings::GlobalBindings;
 pub use importer::{CpuMeshInstance, CpuModel, CpuModelMeshKey};
 pub use line_drawable_builder::{LineDrawableBuilder, LineStripBuilder};
 pub use point_cloud_builder::{PointCloudBatchBuilder, PointCloudBuilder};
@@ -72,12 +77,10 @@ pub use size::Size;
 pub use texture_info::Texture2DBufferInfo;
 pub use transform::RectTransform;
 pub use view_builder::ViewBuilder;
-pub use wgpu_resources::WgpuResourcePoolStatistics;
-
-use draw_phases::DrawPhase;
-pub use draw_phases::{
-    OutlineConfig, OutlineMaskPreference, PickingLayerId, PickingLayerInstanceId,
-    PickingLayerObjectId, PickingLayerProcessor, ScreenshotProcessor,
+pub use wgpu_resources::{
+    GpuPipelineLayoutPool, GpuRenderPipelineHandle, GpuRenderPipelinePool,
+    GpuRenderPipelinePoolAccessor, GpuShaderModuleHandle, GpuShaderModulePool, PipelineLayoutDesc,
+    RenderPipelineDesc, ShaderModuleDesc, VertexBufferLayout, WgpuResourcePoolStatistics,
 };
 
 pub use self::file_system::{get_filesystem, FileSystem};
@@ -94,7 +97,9 @@ pub use self::file_server::FileServer;
 pub use ecolor::{Color32, Hsva, Rgba};
 
 pub mod external {
+    pub use anyhow;
     pub use re_video;
+    pub use smallvec;
     pub use wgpu;
 }
 

@@ -7383,7 +7383,6 @@ dependencies = [
  "anyhow",
  "bitflags 2.8.0",
  "bytemuck",
- "cfg-if",
  "cfg_aliases",
  "clean-path",
  "crossbeam",
