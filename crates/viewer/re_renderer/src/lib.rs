@@ -10,6 +10,7 @@
 // TODO(#6330): remove unwrap()
 #![allow(clippy::unwrap_used)]
 
+mod allocator;
 pub mod device_caps;
 pub mod importer;
 pub mod mesh;
@@ -18,8 +19,8 @@ pub mod resource_managers;
 pub mod texture_info;
 pub mod video;
 pub mod view_builder;
+pub mod wgpu_buffer_types;
 
-mod allocator;
 mod color;
 mod colormap;
 mod context;
@@ -37,7 +38,6 @@ mod queueable_draw_data;
 mod rect;
 mod size;
 mod transform;
-mod wgpu_buffer_types;
 mod wgpu_resources;
 
 #[cfg(test)]
@@ -52,7 +52,10 @@ mod workspace_shaders;
 
 use allocator::GpuReadbackBuffer;
 
-pub use allocator::{CpuWriteGpuReadError, GpuReadbackIdentifier};
+pub use allocator::{
+    create_and_fill_uniform_buffer, create_and_fill_uniform_buffer_batch, CpuWriteGpuReadError,
+    GpuReadbackIdentifier,
+};
 pub use color::Rgba32Unmul;
 pub use colormap::{
     colormap_cyan_to_yellow_srgb, colormap_inferno_srgb, colormap_magma_srgb, colormap_plasma_srgb,
@@ -78,6 +81,7 @@ pub use texture_info::Texture2DBufferInfo;
 pub use transform::RectTransform;
 pub use view_builder::ViewBuilder;
 pub use wgpu_resources::{
+    BindGroupDesc, BindGroupLayoutDesc, GpuBindGroup, GpuBindGroupLayoutHandle,
     GpuPipelineLayoutPool, GpuRenderPipelineHandle, GpuRenderPipelinePool,
     GpuRenderPipelinePoolAccessor, GpuShaderModuleHandle, GpuShaderModulePool, PipelineLayoutDesc,
     RenderPipelineDesc, ShaderModuleDesc, VertexBufferLayout, WgpuResourcePoolStatistics,
@@ -98,6 +102,7 @@ pub use ecolor::{Color32, Hsva, Rgba};
 
 pub mod external {
     pub use anyhow;
+    pub use bytemuck;
     pub use re_video;
     pub use smallvec;
     pub use wgpu;
