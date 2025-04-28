@@ -1,13 +1,13 @@
 use rerun::{external::re_types::try_serialize_field, Component};
 
-/// Custom archetype for drawing a simple raymarched fractal in the 3D view.
+/// Custom archetype for drawing ??TODO?? in the 3D view.
 #[derive(Default)]
-pub struct Fractal {
+pub struct Custom {
     pub positions: Option<rerun::SerializedComponentBatch>,
     pub colors: Option<rerun::SerializedComponentBatch>,
 }
 
-impl rerun::Archetype for Fractal {
+impl rerun::Archetype for Custom {
     type Indicator = rerun::GenericIndicatorComponent<Self>;
 
     fn indicator() -> rerun::SerializedComponentBatch {
@@ -17,11 +17,11 @@ impl rerun::Archetype for Fractal {
     }
 
     fn name() -> rerun::ArchetypeName {
-        "CustomFractal".into()
+        "Custom".into()
     }
 
     fn display_name() -> &'static str {
-        "Fractal"
+        "Custom"
     }
 
     fn required_components() -> ::std::borrow::Cow<'static, [rerun::ComponentDescriptor]> {
@@ -29,12 +29,12 @@ impl rerun::Archetype for Fractal {
     }
 }
 
-impl Fractal {
+impl Custom {
     /// Returns the [`rerun::ComponentDescriptor`] for [`Self::positions`].
     #[inline]
     pub fn descriptor_positions() -> rerun::ComponentDescriptor {
         rerun::ComponentDescriptor {
-            archetype_name: Some("CustomFractal".into()),
+            archetype_name: Some("Custom".into()),
             component_name: rerun::Position3D::name(),
             archetype_field_name: Some("positions".into()),
         }
@@ -44,7 +44,7 @@ impl Fractal {
     #[inline]
     pub fn descriptor_colors() -> rerun::ComponentDescriptor {
         rerun::ComponentDescriptor {
-            archetype_name: Some("CustomFractal".into()),
+            archetype_name: Some("Custom".into()),
             component_name: rerun::Color::name(),
             archetype_field_name: Some("colors".into()),
         }
@@ -76,7 +76,7 @@ impl Fractal {
     }
 }
 
-impl rerun::AsComponents for Fractal {
+impl rerun::AsComponents for Custom {
     #[inline]
     fn as_serialized_batches(&self) -> Vec<rerun::SerializedComponentBatch> {
         use rerun::Archetype as _;
