@@ -27,6 +27,7 @@ mod ipc;
 mod metadata;
 mod migration;
 mod row_id_column_descriptor;
+mod selectors;
 mod sorbet_batch;
 mod sorbet_columns;
 mod sorbet_schema;
@@ -47,8 +48,11 @@ pub use self::{
     },
     migration::migrate_record_batch,
     row_id_column_descriptor::{RowIdColumnDescriptor, WrongDatatypeError},
+    selectors::{
+        ColumnSelector, ColumnSelectorParseError, ComponentColumnSelector, TimeColumnSelector,
+    },
     sorbet_batch::SorbetBatch,
-    sorbet_columns::SorbetColumnDescriptors,
+    sorbet_columns::{ColumnSelectorResolveError, SorbetColumnDescriptors},
     sorbet_schema::SorbetSchema,
 };
 
