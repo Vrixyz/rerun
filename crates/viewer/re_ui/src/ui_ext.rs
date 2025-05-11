@@ -1,12 +1,12 @@
 use std::hash::Hash;
 
 use egui::{
+    Align2, Button, CollapsingResponse, Color32, NumExt as _, Rangef, Rect, Vec2, Widget as _,
     emath::{GuiRounding as _, Rot2},
-    pos2, Align2, Button, CollapsingResponse, Color32, NumExt as _, Rangef, Rect, Vec2,
-    Widget as _,
+    pos2,
 };
 
-use crate::{design_tokens, icons, list_item, DesignTokens, Icon, LabelStyle, SUCCESS_COLOR};
+use crate::{DesignTokens, Icon, LabelStyle, SUCCESS_COLOR, design_tokens, icons, list_item};
 
 static FULL_SPAN_TAG: &str = "rerun_full_span";
 
@@ -318,7 +318,13 @@ pub trait UiExt {
     ) -> Option<R> {
         let ui = self.ui();
 
-        if !ui.memory(|mem| mem.is_popup_open(popup_id)) {
+        if !ui.memory_mut(|mem| {
+            let is_open = mem.is_popup_open(popup_id);
+            if is_open {
+                mem.keep_popup_open(popup_id);
+            }
+            is_open
+        }) {
             return None;
         }
 
@@ -356,7 +362,7 @@ pub trait UiExt {
             });
 
         if ui.input(|i| i.key_pressed(egui::Key::Escape)) || widget_response.clicked_elsewhere() {
-            ui.memory_mut(|mem| mem.close_popup());
+            ui.memory_mut(|mem| mem.close_popup(popup_id));
         }
         ret
     }

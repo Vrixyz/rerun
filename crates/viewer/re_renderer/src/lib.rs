@@ -58,11 +58,12 @@ pub use allocator::{
 };
 pub use color::Rgba32Unmul;
 pub use colormap::{
-    colormap_cyan_to_yellow_srgb, colormap_inferno_srgb, colormap_magma_srgb, colormap_plasma_srgb,
-    colormap_srgb, colormap_turbo_srgb, colormap_viridis_srgb, grayscale_srgb, Colormap,
+    Colormap, colormap_cyan_to_yellow_srgb, colormap_inferno_srgb, colormap_magma_srgb,
+    colormap_plasma_srgb, colormap_srgb, colormap_turbo_srgb, colormap_viridis_srgb,
+    grayscale_srgb,
 };
 pub use context::{
-    adapter_info_summary, MsaaMode, RenderConfig, RenderContext, RenderContextError,
+    MsaaMode, RenderConfig, RenderContext, RenderContextError, adapter_info_summary,
 };
 pub use debug_label::DebugLabel;
 pub use depth_offset::DepthOffset;
@@ -87,13 +88,13 @@ pub use wgpu_resources::{
     RenderPipelineDesc, ShaderModuleDesc, VertexBufferLayout, WgpuResourcePoolStatistics,
 };
 
-pub use self::file_system::{get_filesystem, FileSystem};
+pub use self::file_system::{FileSystem, get_filesystem};
 #[allow(unused_imports)] // they can be handy from time to time
 use self::file_system::{MemFileSystem, OsFileSystem};
 
 pub use self::file_resolver::{
-    new_recommended as new_recommended_file_resolver, FileResolver, ImportClause,
-    RecommendedFileResolver, SearchPath,
+    FileResolver, ImportClause, RecommendedFileResolver, SearchPath,
+    new_recommended as new_recommended_file_resolver,
 };
 pub use self::file_server::FileServer;
 

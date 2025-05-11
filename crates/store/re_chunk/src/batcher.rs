@@ -14,7 +14,7 @@ use re_byte_size::SizeBytes as _;
 use re_log_types::{EntityPath, ResolvedTimeRange, TimeInt, TimePoint, Timeline, TimelineName};
 use re_types_core::ComponentDescriptor;
 
-use crate::{chunk::ChunkComponents, Chunk, ChunkId, ChunkResult, RowId, TimeColumn};
+use crate::{Chunk, ChunkId, ChunkResult, RowId, TimeColumn, chunk::ChunkComponents};
 
 // ---
 
@@ -270,11 +270,16 @@ impl ChunkBatcherConfig {
 
 #[test]
 fn chunk_batcher_config() {
+    #![allow(unsafe_code)] // It's only a test
+
     // Detect breaking changes in our environment variables.
-    std::env::set_var("RERUN_FLUSH_TICK_SECS", "0.3");
-    std::env::set_var("RERUN_FLUSH_NUM_BYTES", "42");
-    std::env::set_var("RERUN_FLUSH_NUM_ROWS", "666");
-    std::env::set_var("RERUN_CHUNK_MAX_ROWS_IF_UNSORTED", "7777");
+    // SAFETY: it's a test
+    unsafe {
+        std::env::set_var("RERUN_FLUSH_TICK_SECS", "0.3");
+        std::env::set_var("RERUN_FLUSH_NUM_BYTES", "42");
+        std::env::set_var("RERUN_FLUSH_NUM_ROWS", "666");
+        std::env::set_var("RERUN_CHUNK_MAX_ROWS_IF_UNSORTED", "7777");
+    }
 
     let config = ChunkBatcherConfig::from_env().unwrap();
     let expected = ChunkBatcherConfig {
@@ -286,7 +291,10 @@ fn chunk_batcher_config() {
     };
     assert_eq!(expected, config);
 
-    std::env::set_var("RERUN_MAX_CHUNK_ROWS_IF_UNSORTED", "9999");
+    // SAFETY: it's a test
+    unsafe {
+        std::env::set_var("RERUN_MAX_CHUNK_ROWS_IF_UNSORTED", "9999");
+    }
 
     let config = ChunkBatcherConfig::from_env().unwrap();
     let expected = ChunkBatcherConfig {
@@ -748,11 +756,11 @@ impl PendingRow {
             })
             .collect();
 
-        let mut per_name = ChunkComponents::default();
+        let mut per_desc = ChunkComponents::default();
         for (component_desc, array) in components {
             let list_array = arrays_to_list_array_opt(&[Some(&*array as _)]);
             if let Some(list_array) = list_array {
-                per_name.insert_descriptor(component_desc, list_array);
+                per_desc.insert(component_desc, list_array);
             }
         }
 
@@ -762,7 +770,7 @@ impl PendingRow {
             Some(true),
             &[row_id],
             timelines,
-            per_name,
+            per_desc,
         )
     }
 
@@ -896,15 +904,15 @@ impl PendingRow {
                                     .map(|(name, time_column)| (name, time_column.finish()))
                                     .collect(),
                                 {
-                                    let mut per_name = ChunkComponents::default();
+                                    let mut per_desc = ChunkComponents::default();
                                     for (component_desc, arrays) in std::mem::take(&mut components)
                                     {
                                         let list_array = arrays_to_list_array_opt(&arrays);
                                         if let Some(list_array) = list_array {
-                                            per_name.insert_descriptor(component_desc, list_array);
+                                            per_desc.insert(component_desc, list_array);
                                         }
                                     }
-                                    per_name
+                                    per_desc
                                 },
                             ));
 
@@ -942,14 +950,14 @@ impl PendingRow {
                         .map(|(timeline, time_column)| (timeline, time_column.finish()))
                         .collect(),
                     {
-                        let mut per_name = ChunkComponents::default();
+                        let mut per_desc = ChunkComponents::default();
                         for (component_desc, arrays) in components {
                             let list_array = arrays_to_list_array_opt(&arrays);
                             if let Some(list_array) = list_array {
-                                per_name.insert_descriptor(component_desc, list_array);
+                                per_desc.insert(component_desc, list_array);
                             }
                         }
-                        per_name
+                        per_desc
                     },
                 ));
 

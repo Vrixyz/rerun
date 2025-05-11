@@ -6,28 +6,27 @@ use re_build_info::CrateVersion;
 use re_capabilities::MainThreadToken;
 use re_chunk::TimelineName;
 use re_data_source::{DataSource, FileContents};
-use re_entity_db::{entity_db::EntityDb, InstancePath};
+use re_entity_db::{InstancePath, entity_db::EntityDb};
 use re_log_types::{ApplicationId, FileSource, LogMsg, StoreId, StoreKind, TableMsg};
 use re_renderer::WgpuResourcePoolStatistics;
 use re_smart_channel::{ReceiveSet, SmartChannelSource};
-use re_ui::{notifications, DesignTokens, UICommand, UICommandSender as _};
+use re_ui::{DesignTokens, UICommand, UICommandSender as _, notifications};
 use re_uri::Origin;
 use re_viewer_context::{
-    command_channel,
-    store_hub::{BlueprintPersistence, StoreHub, StoreHubStats},
     AppOptions, AsyncRuntimeHandle, BlueprintUndoState, CommandReceiver, CommandSender,
     ComponentUiRegistry, DisplayMode, Item, PlayState, RecordingConfig, StorageContext,
     StoreContext, StoreHubEntry, SystemCommand, SystemCommandSender as _, TableStore, ViewClass,
-    ViewClassRegistry, ViewClassRegistryError,
+    ViewClassRegistry, ViewClassRegistryError, command_channel,
+    store_hub::{BlueprintPersistence, StoreHub, StoreHubStats},
 };
 
 use crate::startup_options::StartupOptions;
 use crate::{
+    AppState,
     app_blueprint::{AppBlueprint, PanelStateOverrides},
     app_state::WelcomeScreenState,
     background_tasks::BackgroundTasks,
     event::ViewerEventDispatcher,
-    AppState,
 };
 // ----------------------------------------------------------------------------
 
@@ -707,13 +706,13 @@ impl App {
             let re_log_types::DataPath {
                 entity_path,
                 instance,
-                component_name,
+                component_descriptor,
             } = focus;
 
-            let item = if let Some(component_name) = component_name {
+            let item = if let Some(component_descriptor) = component_descriptor {
                 Item::from(re_log_types::ComponentPath::new(
                     entity_path,
-                    component_name,
+                    component_descriptor,
                 ))
             } else if let Some(instance) = instance {
                 Item::from(InstancePath::instance(entity_path, instance))
@@ -1370,6 +1369,7 @@ impl App {
                             },
                             is_history_enabled,
                             self.event_dispatcher.as_ref(),
+                            &self.async_runtime,
                         );
                         render_ctx.before_submit();
                     }
@@ -1394,32 +1394,29 @@ impl App {
         // TODO(grtlr): Should we bring back analytics for this too?
         self.rx_table.lock().retain(|rx| match rx.try_recv() {
             Ok(table) => {
+                // TODO(grtlr): For now we don't append anything to existing stores and always replace.
+                // TODO(ab): When we actually append to existing table, we will have to clear the UI
+                // cache by calling `DataFusionTableWidget::clear_state`.
+                let store = TableStore::default();
+                if let Err(err) = store.add_record_batch(table.data.clone()) {
+                    re_log::warn!("Failed to load table {}: {err}", table.id);
+                } else {
+                    if store_hub
+                        .insert_table_store(table.id.clone(), store)
+                        .is_some()
+                    {
+                        re_log::debug!("Overwritten table store with id: `{}`", table.id);
+                    } else {
+                        re_log::debug!("Inserted table store with id: `{}`", table.id);
+                    };
+                    self.command_sender.send_system(SystemCommand::SetSelection(
+                        re_viewer_context::Item::TableId(table.id.clone()),
+                    ));
 
-                match re_sorbet::SorbetBatch::try_from_record_batch(&table.data, re_sorbet::BatchType::Dataframe)  {
-                    Ok(sorbet_batch) => {
-                        // TODO(grtlr): For now we don't append anything to existing stores and always replace.
-                        let store = TableStore::default();
-                        store.add_batch(sorbet_batch);
-
-                        if store_hub.insert_table_store(table.id.clone(), store).is_some() {
-                            re_log::debug!("Overwritten table store with id: `{}`", table.id);
-                        } else {
-                            re_log::debug!("Inserted table store with id: `{}`", table.id);
-                        };
-                        self.command_sender.send_system(SystemCommand::SetSelection(
-                            re_viewer_context::Item::TableId(table.id.clone()),
-                        ));
-
-                        // If the viewer is in the background, tell the user that it has received something new.
-                        egui_ctx.send_viewport_cmd(
-                            egui::ViewportCommand::RequestUserAttention(
-                                egui::UserAttentionType::Informational,
-                            ),
-                        );
-                    },
-                    Err(err) => {
-                        re_log::warn!("the received dataframe does not contain Sorbet-complaiant batches: {err}");
-                    }
+                    // If the viewer is in the background, tell the user that it has received something new.
+                    egui_ctx.send_viewport_cmd(egui::ViewportCommand::RequestUserAttention(
+                        egui::UserAttentionType::Informational,
+                    ));
                 }
 
                 true

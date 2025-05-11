@@ -1,8 +1,8 @@
-use std::sync::mpsc::Sender;
 use std::sync::Arc;
+use std::sync::mpsc::Sender;
 use std::thread;
 
-use anyhow::{anyhow, Context as _};
+use anyhow::{Context as _, anyhow};
 use arrow::array::{
     ArrayRef, BinaryArray, FixedSizeListArray, Int64Array, RecordBatch, StringArray, StructArray,
 };
@@ -10,10 +10,10 @@ use arrow::compute::cast;
 use arrow::datatypes::{DataType, Field};
 use itertools::Either;
 use re_arrow_util::ArrowArrayDowncastRef as _;
-use re_chunk::{external::nohash_hasher::IntMap, TimelineName};
 use re_chunk::{
     ArrowArray, Chunk, ChunkId, EntityPath, RowId, TimeColumn, TimeInt, TimePoint, Timeline,
 };
+use re_chunk::{TimelineName, external::nohash_hasher::IntMap};
 
 use re_log_types::{ApplicationId, StoreId};
 use re_types::archetypes::{
@@ -23,8 +23,8 @@ use re_types::components::{Name, Scalar, VideoTimestamp};
 use re_types::{Archetype, Component, ComponentBatch};
 
 use crate::lerobot::{
-    is_lerobot_dataset, is_v1_lerobot_dataset, DType, EpisodeIndex, Feature, LeRobotDataset,
-    TaskIndex,
+    DType, EpisodeIndex, Feature, LeRobotDataset, TaskIndex, is_lerobot_dataset,
+    is_v1_lerobot_dataset,
 };
 use crate::load_file::prepare_store_info;
 use crate::{DataLoader, DataLoaderError, LoadedData};
@@ -282,7 +282,7 @@ fn log_episode_task(
     dataset: &LeRobotDataset,
     timeline: &Timeline,
     data: &RecordBatch,
-) -> Result<impl ExactSizeIterator<Item = Chunk>, DataLoaderError> {
+) -> Result<impl ExactSizeIterator<Item = Chunk> + use<>, DataLoaderError> {
     let task_indices = data
         .column_by_name("task_index")
         .and_then(|c| c.downcast_array_ref::<Int64Array>())
@@ -317,7 +317,7 @@ fn load_episode_images(
     observation: &str,
     timeline: &Timeline,
     data: &RecordBatch,
-) -> Result<impl ExactSizeIterator<Item = Chunk>, DataLoaderError> {
+) -> Result<impl ExactSizeIterator<Item = Chunk> + use<>, DataLoaderError> {
     let image_bytes = data
         .column_by_name(observation)
         .and_then(|c| c.downcast_array_ref::<StructArray>())
@@ -346,7 +346,7 @@ fn load_episode_depth_images(
     observation: &str,
     timeline: &Timeline,
     data: &RecordBatch,
-) -> Result<impl ExactSizeIterator<Item = Chunk>, DataLoaderError> {
+) -> Result<impl ExactSizeIterator<Item = Chunk> + use<>, DataLoaderError> {
     let image_bytes = data
         .column_by_name(observation)
         .and_then(|c| c.downcast_array_ref::<StructArray>())
@@ -379,7 +379,7 @@ fn load_episode_video(
     episode: EpisodeIndex,
     timeline: &Timeline,
     time_column: TimeColumn,
-) -> Result<impl ExactSizeIterator<Item = Chunk>, DataLoaderError> {
+) -> Result<impl ExactSizeIterator<Item = Chunk> + use<>, DataLoaderError> {
     let contents = dataset
         .read_episode_video_contents(observation, episode)
         .with_context(|| format!("Reading video contents for episode {episode:?} failed!"))?;
@@ -421,7 +421,7 @@ fn load_episode_video(
                         video_frame_reference_indicators_list_array,
                     ),
                     (
-                        video_timestamp_batch.descriptor().into_owned(),
+                        VideoFrameReference::descriptor_timestamp(),
                         video_timestamp_list_array,
                     ),
                 ]
@@ -535,7 +535,7 @@ fn make_scalar_batch_entity_chunks(
     feature: &Feature,
     timelines: &IntMap<TimelineName, TimeColumn>,
     data: &FixedSizeListArray,
-) -> Result<impl ExactSizeIterator<Item = Chunk>, DataLoaderError> {
+) -> Result<impl ExactSizeIterator<Item = Chunk> + use<>, DataLoaderError> {
     let num_elements = data.value_length() as usize;
 
     let mut chunks = Vec::with_capacity(num_elements);

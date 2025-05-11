@@ -3,10 +3,11 @@ mod hierarchical_drag_and_drop;
 mod right_panel;
 
 use egui::Modifiers;
+use egui::containers::menu;
 use re_ui::filter_widget::format_matching_text;
 use re_ui::{
-    filter_widget::FilterState, list_item, maybe_plus, modifiers_text, CommandPalette,
-    ContextExt as _, DesignTokens, Help, UICommand, UICommandSender, UiExt as _,
+    CommandPalette, ContextExt as _, DesignTokens, Help, UICommand, UICommandSender, UiExt as _,
+    filter_widget::FilterState, list_item, maybe_plus, modifiers_text,
 };
 use re_ui::{icon_text, icons, notifications};
 
@@ -209,7 +210,7 @@ impl eframe::App for ExampleApp {
             self.modal_handler.ui(
                 ui.ctx(),
                 || re_ui::modal::ModalWrapper::new("Modal window"),
-                |ui, _| ui.label("This is a modal window."),
+                |ui| ui.label("This is a modal window."),
             );
 
             // ---
@@ -221,7 +222,7 @@ impl eframe::App for ExampleApp {
             self.full_span_modal_handler.ui(
                 ui.ctx(),
                 || re_ui::modal::ModalWrapper::new("Modal window").full_span_content(true),
-                |ui, _| {
+                |ui| {
                     list_item::list_item_scope(ui, "modal demo", |ui| {
                         for idx in 0..10 {
                             list_item::ListItem::new()
@@ -412,7 +413,7 @@ impl ExampleApp {
                     }
                 }
 
-                egui::menu::bar(ui, |ui| {
+                menu::Bar::new().ui(ui, |ui| {
                     ui.set_height(top_bar_style.height);
                     ui.add_space(top_bar_style.indent);
 

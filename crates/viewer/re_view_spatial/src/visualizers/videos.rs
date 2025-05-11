@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use re_log_types::{hash::Hash64, EntityPath};
+use re_log_types::{EntityPath, hash::Hash64};
 use re_renderer::{
     external::re_video::VideoLoadError,
     renderer::{
@@ -10,9 +10,9 @@ use re_renderer::{
     video::{Video, VideoFrameTexture},
 };
 use re_types::{
+    Archetype as _,
     archetypes::{AssetVideo, VideoFrameReference},
     components::{Blob, MediaType, VideoTimestamp},
-    Archetype as _, Component as _,
 };
 use re_viewer_context::{
     IdentifiedViewSystem, MaybeVisualizableEntities, TypedComponentFallbackProvider, VideoCache,
@@ -22,16 +22,16 @@ use re_viewer_context::{
 };
 
 use crate::{
+    PickableRectSourceData, PickableTexturedRect, SpatialView2D,
     contexts::SpatialSceneEntityContext,
     ui::SpatialViewState,
     view_kind::SpatialViewKind,
-    visualizers::{entity_iterator, filter_visualizable_2d_entities, LoadingSpinner},
-    PickableRectSourceData, PickableTexturedRect, SpatialView2D,
+    visualizers::{LoadingSpinner, entity_iterator, filter_visualizable_2d_entities},
 };
 
 use super::{
-    entity_iterator::process_archetype, SpatialViewVisualizerData, UiLabel, UiLabelStyle,
-    UiLabelTarget,
+    SpatialViewVisualizerData, UiLabel, UiLabelStyle, UiLabelTarget,
+    entity_iterator::process_archetype,
 };
 
 pub struct VideoFrameReferenceVisualizer {
@@ -87,19 +87,15 @@ impl VisualizerSystem for VideoFrameReferenceVisualizer {
                 let entity_path = ctx.target_entity_path;
 
                 let Some(all_video_timestamp_chunks) =
-                    results.get_required_chunks(&VideoTimestamp::name())
+                    results.get_required_chunks(VideoFrameReference::descriptor_timestamp())
                 else {
                     return Ok(());
                 };
                 let all_video_references =
-                    results.iter_as(timeline, re_types::components::EntityPath::name());
+                    results.iter_as(timeline, VideoFrameReference::descriptor_video_reference());
 
                 for (_index, video_timestamps, video_references) in re_query::range_zip_1x1(
-                    entity_iterator::iter_component(
-                        &all_video_timestamp_chunks,
-                        timeline,
-                        VideoTimestamp::name(),
-                    ),
+                    entity_iterator::iter_component(&all_video_timestamp_chunks, timeline),
                     all_video_references.slice::<String>(),
                 ) {
                     let Some(video_timestamp): Option<&VideoTimestamp> = video_timestamps.first()
@@ -397,7 +393,7 @@ fn latest_at_query_video_from_datastore(
         AssetVideo::all_components().iter(),
     );
 
-    let blob_row_id = results.component_row_id(&Blob::name())?;
+    let blob_row_id = results.component_row_id(&AssetVideo::descriptor_blob())?;
     let blob = results.component_instance::<Blob>(0)?;
     let media_type = results.component_instance::<MediaType>(0);
 
@@ -405,7 +401,8 @@ fn latest_at_query_video_from_datastore(
         let debug_name = entity_path.to_string();
         c.entry(
             debug_name,
-            Hash64::hash(blob_row_id),
+            blob_row_id,
+            &AssetVideo::descriptor_blob(),
             &blob,
             media_type.as_ref(),
             ctx.app_options().video_decoder_settings(),

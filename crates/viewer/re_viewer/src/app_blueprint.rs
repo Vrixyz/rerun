@@ -4,9 +4,12 @@ use re_chunk::{Chunk, RowId};
 use re_chunk_store::LatestAtQuery;
 use re_entity_db::EntityDb;
 use re_log_types::EntityPath;
-use re_types::{blueprint::components::PanelState, ComponentBatch};
+use re_types::{
+    ComponentBatch,
+    blueprint::{archetypes::PanelBlueprint, components::PanelState},
+};
 use re_viewer_context::{
-    blueprint_timepoint_for_writes, CommandSender, SystemCommand, SystemCommandSender as _,
+    CommandSender, SystemCommand, SystemCommandSender as _, blueprint_timepoint_for_writes,
 };
 
 const TOP_PANEL_PATH: &str = "top_panel";
@@ -246,6 +249,6 @@ fn load_panel_state(
 ) -> Option<PanelState> {
     re_tracing::profile_function!();
     blueprint_db
-        .latest_at_component_quiet::<PanelState>(path, query)
+        .latest_at_component_quiet::<PanelState>(path, query, &PanelBlueprint::descriptor_state())
         .map(|(_index, p)| p)
 }

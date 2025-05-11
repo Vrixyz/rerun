@@ -1,6 +1,6 @@
 use ahash::HashSet;
 use egui::{Context, Frame, Id, Margin, RichText, Stroke, Style};
-use re_ui::{design_tokens, icons, Scale, UiExt as _};
+use re_ui::{Scale, UiExt as _, design_tokens, icons};
 
 pub const CELL_MARGIN: Margin = Margin::symmetric(8, 6);
 
@@ -99,6 +99,13 @@ impl TableConfig {
             id,
             columns: Vec::new(),
         }
+    }
+
+    /// Remove the table config from the cache.
+    pub fn clear_state(ctx: &Context, persisted_id: Id) {
+        ctx.data_mut(|data| {
+            data.remove::<Self>(persisted_id);
+        });
     }
 
     /// Get a table config, creating it if it doesn't exist.

@@ -1,5 +1,5 @@
-use egui::{os::OperatingSystem, Key, KeyboardShortcut, Modifiers};
-use smallvec::{smallvec, SmallVec};
+use egui::{Key, KeyboardShortcut, Modifiers, os::OperatingSystem};
+use smallvec::{SmallVec, smallvec};
 
 /// Interface for sending [`UICommand`] messages.
 pub trait UICommandSender {
@@ -302,7 +302,7 @@ impl UICommand {
 
             Self::AddRedapServer => (
                 "Add Redap server",
-                "Connect to a Redap server (experimental)"
+                "Connect to a Redap server (experimental)",
             ),
         }
     }
@@ -519,7 +519,7 @@ impl UICommand {
 
         if response.clicked() {
             command_sender.send_ui(self);
-            ui.close_menu();
+            ui.close();
         }
 
         response

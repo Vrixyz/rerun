@@ -3,7 +3,7 @@ use itertools::Either;
 
 use re_chunk_store::ChunkStoreEvent;
 use re_log_types::hash::Hash64;
-use re_types::{datatypes::TensorData, Component as _};
+use re_types::{Component as _, datatypes::TensorData};
 
 use crate::{Cache, TensorStats};
 
@@ -41,7 +41,7 @@ impl Cache for TensorStatsCache {
                     event
                         .chunk
                         .components()
-                        .contains_key(&re_types::components::TensorData::name())
+                        .contains_component_name(re_types::components::TensorData::name())
                 };
 
                 if is_deletion() && contains_tensor_data() {

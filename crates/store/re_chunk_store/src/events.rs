@@ -205,8 +205,8 @@ mod tests {
 
     use re_chunk::{RowId, TimelineName};
     use re_log_types::{
-        example_components::{MyColor, MyIndex, MyPoint},
         EntityPath, TimeInt, TimePoint, Timeline,
+        example_components::{MyColor, MyIndex, MyPoint},
     };
     use re_types_core::{Component as _, ComponentName};
 
@@ -262,7 +262,7 @@ mod tests {
                     .entry(event.chunk.entity_path().clone())
                     .or_default() += delta_chunks;
 
-                for (component_desc, list_array) in event.chunk.components().iter_flattened() {
+                for (component_desc, list_array) in event.chunk.components().iter() {
                     let delta = event.delta() * list_array.iter().flatten().count() as i64;
                     *self
                         .component_names

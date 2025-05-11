@@ -98,23 +98,19 @@ impl Ord for ComponentColumnDescriptor {
 
 impl std::fmt::Display for ComponentColumnDescriptor {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let descriptor = self.component_descriptor();
+
         let Self {
             entity_path,
-            archetype_name,
-            archetype_field_name,
-            component_name,
+            archetype_name: _,
+            archetype_field_name: _,
+            component_name: _,
             store_datatype: _,
             is_static,
             is_indicator: _,
             is_tombstone: _,
             is_semantically_empty: _,
         } = self;
-
-        let descriptor = ComponentDescriptor {
-            archetype_name: *archetype_name,
-            archetype_field_name: *archetype_field_name,
-            component_name: *component_name,
-        };
 
         let s = format!("{entity_path}@{}", descriptor.short_name());
 
@@ -164,6 +160,14 @@ impl ComponentColumnDescriptor {
     pub fn component_path(&self) -> ComponentPath {
         ComponentPath {
             entity_path: self.entity_path.clone(),
+            component_descriptor: self.component_descriptor(),
+        }
+    }
+
+    pub fn component_descriptor(&self) -> ComponentDescriptor {
+        ComponentDescriptor {
+            archetype_name: self.archetype_name,
+            archetype_field_name: self.archetype_field_name,
             component_name: self.component_name,
         }
     }

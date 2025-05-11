@@ -7,7 +7,7 @@ use re_smart_channel::{ReceiveSet, SmartChannelSource};
 use re_ui::{ContextExt as _, UICommand, UiExt as _};
 use re_viewer_context::StoreContext;
 
-use crate::{app_blueprint::AppBlueprint, App};
+use crate::{App, app_blueprint::AppBlueprint};
 
 pub fn top_panel(
     frame: &eframe::Frame,
@@ -45,7 +45,7 @@ pub fn top_panel(
             }
         }
 
-        egui::menu::bar(ui, |ui| {
+        egui::containers::menu::Bar::new().ui(ui, |ui| {
             ui.set_height(top_bar_style.height);
             ui.add_space(top_bar_style.indent);
 
