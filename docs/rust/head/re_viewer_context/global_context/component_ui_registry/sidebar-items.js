@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["EditOrView"],"fn":["try_deserialize"],"struct":["ComponentUiRegistry","ComponentUiTypes","EditTarget"],"type":["LegacyDisplayComponentUiCallback","UntypedComponentEditOrViewCallback"]};
