@@ -556,7 +556,13 @@
 <a href="#555" id="555">555</a>
 <a href="#556" id="556">556</a>
 <a href="#557" id="557">557</a>
-<a href="#558" id="558">558</a></pre></div><pre class="rust"><code><span class="kw">use </span>egui::Rangef;
+<a href="#558" id="558">558</a>
+<a href="#559" id="559">559</a>
+<a href="#560" id="560">560</a>
+<a href="#561" id="561">561</a>
+<a href="#562" id="562">562</a>
+<a href="#563" id="563">563</a>
+<a href="#564" id="564">564</a></pre></div><pre class="rust"><code><span class="kw">use </span>egui::Rangef;
 
 <span class="kw">use </span>re_chunk_store::UnitChunkShared;
 <span class="kw">use </span>re_entity_db::InstancePath;
@@ -802,6 +808,12 @@
                     component_descr
                         .component_name
                         .data_ui_recording(ctx, ui, UiLayout::Tooltip);
+                    <span class="kw">if let </span><span class="prelude-val">Some</span>(data) = unit.component_batch_raw(component_descr) {
+                        ui.list_item_flat_noninteractive(
+                            re_ui::list_item::PropertyContent::new(<span class="string">"Data type"</span>)
+                                .value_text(re_arrow_util::format_data_type(data.data_type())),
+                        );
+                    }
                 });
 
                 <span class="kw">if </span>interactive {
