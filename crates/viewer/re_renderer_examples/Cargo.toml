@@ -13,8 +13,12 @@ workspace = true
 [features]
 
 [[bin]]
-name = "2d"    # NOLINT
+name = "2d" # NOLINT
 path = "2d.rs" # NOLINT
+
+[[bin]]
+name = "rapier" # NOLINT
+path = "rapier.rs" # NOLINT
 
 [[bin]]
 name = "depth_cloud"
@@ -61,6 +65,8 @@ winit = { workspace = true, default-features = false, features = [
   "wayland",
   "wayland-dlopen",
 ] }
+rapier3d = { version = "0.26", features = ["debug-render"] }
+nalgebra = { version = "0.33", features = ["glam028"] }
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 console_error_panic_hook.workspace = true
