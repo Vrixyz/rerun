@@ -174,7 +174,7 @@ impl<E: Example + 'static> Application<E> {
         let surface_config = wgpu::SurfaceConfiguration {
             // Use AutoNoVSync if you want to do quick perf checking.
             // Otherwise, use AutoVsync is much more pleasant to use - laptops don't heat up and desktop won't have annoying coil whine on trivial examples.
-            present_mode: wgpu::PresentMode::AutoVsync,
+            present_mode: wgpu::PresentMode::Immediate,
             format: self.re_ctx.output_format_color(),
             view_formats: vec![self.re_ctx.output_format_color()],
             ..self
