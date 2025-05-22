@@ -126,12 +126,12 @@ impl<E: Example + 'static> Application<E> {
             .await
             .context("failed to find an appropriate adapter")?;
 
-        let device_caps = DeviceCaps::from_adapter(&adapter)?;
+        //let device_caps = DeviceCaps::from_adapter(&adapter)?;
         let (device, queue) = adapter
             .request_device(&wgpu::DeviceDescriptor {
                 label: None,
                 required_features: wgpu::Features::empty(),
-                required_limits: device_caps.limits(),
+                required_limits: dbg!(wgpu::Limits::default()),
                 memory_hints: Default::default(),
                 trace: wgpu::Trace::Off,
             })
