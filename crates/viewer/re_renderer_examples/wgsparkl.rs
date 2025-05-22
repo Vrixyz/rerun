@@ -7,11 +7,13 @@ use core::num;
 use std::sync::Arc;
 
 use bytemuck::{Pod, Zeroable};
-use glam::Vec4;
+use glam::{UVec3, Vec2, Vec3, Vec4};
 use nalgebra::Vector3;
 use re_renderer::{
-    Color32, LineBatchBuilder, LineDrawableBuilder, PointCloudBuilder, RenderContext, Size,
-    renderer::{LineStripFlags, PointCloudDrawData},
+    Color32, DebugLabel, LineBatchBuilder, LineDrawableBuilder, PickingLayerId, PointCloudBuilder,
+    RenderContext, Rgba32Unmul, Size,
+    mesh::{CpuMesh, GpuMesh},
+    renderer::{GpuMeshInstance, LineStripFlags, PointCloudDrawData},
     view_builder::{self, Projection, ViewBuilder},
 };
 
@@ -52,6 +54,7 @@ struct RenderWgSparkl {
     pub mpm_data: MpmData,
     pub mpm_pipeline: MpmPipeline,
     pub num_substeps: usize,
+    pub mesh_instances: Vec<GpuMeshInstance>,
 }
 
 #[derive(Clone)]
@@ -104,6 +107,43 @@ impl framework::Example for RenderWgSparkl {
         let rigid_body = RigidBodyBuilder::fixed().translation(vector![0.0, -ground_height, 0.0]);
         let ground_handle = rapier_data.bodies.insert(rigid_body);
         let collider = ColliderBuilder::cuboid(ground_size, ground_height, ground_size);
+        let trimesh = collider.shape.as_cuboid().unwrap().to_trimesh();
+
+        let vertex_positions = trimesh.0.into_iter().map(|i| Vec3::from(i)).collect();
+        let triangle_indices = trimesh
+            .1
+            .into_iter()
+            .map(|i| UVec3::from_array(i))
+            .collect();
+        let MeshData {
+            indices,
+            positions,
+            uvs,
+            colors,
+            normals,
+        } = duplicate_vertices_and_compute_normals(&vertex_positions, &triangle_indices);
+        let material = re_renderer::mesh::Material {
+            label: "ground_mat".into(),
+            index_range: 0..(indices.len() * 3) as u32,
+            albedo: re_ctx
+                .texture_manager_2d
+                .white_texture_unorm_handle()
+                .clone(),
+            albedo_factor: re_renderer::Rgba::WHITE,
+        };
+        let cpu_mesh = CpuMesh {
+            label: DebugLabel::from("ground".to_string()),
+            triangle_indices: indices,
+            vertex_positions: positions,
+            vertex_colors: colors
+                .iter()
+                .map(|c| Rgba32Unmul::from_rgba_unmul_array(*c))
+                .collect(),
+            vertex_normals: normals,
+            vertex_texcoords: uvs,
+            materials: vec![material].into(),
+        };
+        cpu_mesh.sanity_check().expect("Incorrect mesh.");
         rapier_data
             .colliders
             .insert_with_parent(collider, ground_handle, &mut rapier_data.bodies);
@@ -151,6 +191,17 @@ impl framework::Example for RenderWgSparkl {
             mpm_data,
             mpm_pipeline: pipeline,
             num_substeps,
+            mesh_instances: vec![GpuMeshInstance {
+                gpu_mesh: Arc::new(GpuMesh::new(re_ctx, &cpu_mesh).unwrap()),
+                world_from_mesh: glam::Affine3A::from_translation(glam::vec3(
+                    0.0,
+                    -ground_height,
+                    0.0,
+                )),
+                picking_layer_id: PickingLayerId::default(),
+                additive_tint: Color32::WHITE,
+                outline_mask_ids: Default::default(),
+            }],
         }
     }
 
@@ -189,10 +240,10 @@ impl framework::Example for RenderWgSparkl {
         Ok(vec![
             // 3D view
             {
-                let secs_since_startup = time.secs_since_startup() / 50f32;
+                let secs_since_startup = time.secs_since_startup() / 5f32;
                 let camera_rotation_center = glam::vec3(0f32, 20f32, 0f32);
                 let camera_position =
-                    glam::vec3(secs_since_startup.sin(), 0.5, secs_since_startup.cos()) * 50f32
+                    glam::vec3(secs_since_startup.sin(), 0.5, secs_since_startup.cos()) * 150f32
                         + camera_rotation_center;
                 let mut view_builder = ViewBuilder::new(
                     re_ctx,
@@ -214,6 +265,10 @@ impl framework::Example for RenderWgSparkl {
                         ..Default::default()
                     },
                 );
+                view_builder.queue_draw(re_renderer::renderer::MeshDrawData::new(
+                    re_ctx,
+                    &self.mesh_instances,
+                )?);
                 view_builder.queue_draw(point_draw_data.clone());
                 let command_buffer = view_builder
                     .queue_draw(line_strip_draw_data)
@@ -450,4 +505,47 @@ pub mod read_particles {
             futures::executor::block_on(positions_staging.read(device)).unwrap();
         positions
     }
+}
+
+#[derive(Clone, Debug)]
+pub struct MeshData {
+    pub indices: Vec<UVec3>,
+    pub positions: Vec<Vec3>,
+    pub uvs: Vec<Vec2>,
+    pub colors: Vec<[u8; 4]>,
+    pub normals: Vec<Vec3>,
+}
+
+pub fn duplicate_vertices_and_compute_normals(
+    points: &Vec<Vec3>,
+    indices: &Vec<UVec3>,
+) -> MeshData {
+    let mut mesh_data = MeshData {
+        indices: vec![],
+        positions: vec![],
+        uvs: vec![],
+        colors: vec![],
+        normals: vec![],
+    };
+    for (i, indices) in indices.iter().enumerate() {
+        let v0 = points[indices[0] as usize];
+        let v1 = points[indices[1] as usize];
+        let v2 = points[indices[2] as usize];
+        let normal = (v0 - v2).cross(v1 - v2).normalize();
+
+        mesh_data.indices.push(UVec3::new(
+            (i * 3) as u32,
+            (i * 3) as u32 + 1,
+            (i * 3) as u32 + 2,
+        ));
+        mesh_data.positions.push(v0);
+        mesh_data.positions.push(v1);
+        mesh_data.positions.push(v2);
+        for _ in 0..3 {
+            mesh_data.normals.push(normal);
+            mesh_data.colors.push([100, 100, 100, 255]);
+            mesh_data.uvs.push(Vec2::new(0f32, 0f32));
+        }
+    }
+    mesh_data
 }

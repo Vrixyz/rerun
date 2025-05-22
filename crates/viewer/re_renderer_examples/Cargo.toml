@@ -21,6 +21,10 @@ name = "wgsparkl"
 path = "wgsparkl.rs"
 
 [[bin]]
+name = "mesh"
+path = "mesh.rs"
+
+[[bin]]
 name = "depth_cloud"
 path = "depth_cloud.rs"
 
