@@ -9,22 +9,17 @@ use bytemuck::{Pod, Zeroable};
 use glam::Vec4;
 use nalgebra::Vector3;
 use re_renderer::{
-    Color32, LineBatchBuilder, LineDrawableBuilder, RenderContext, Size,
-    renderer::LineStripFlags,
+    Color32, LineBatchBuilder, LineDrawableBuilder, PointCloudBuilder, RenderContext, Size,
+    renderer::{LineStripFlags, PointCloudDrawData},
     view_builder::{self, Projection, ViewBuilder},
 };
 
-use rapier3d::pipeline::{
-    DebugColor, DebugRenderBackend, DebugRenderMode, DebugRenderObject, DebugRenderPipeline,
-};
+use rapier3d::pipeline::{DebugColor, DebugRenderBackend, DebugRenderObject, DebugRenderPipeline};
 use rapier3d::prelude::*;
 
 use wgpu::Buffer;
 
-use wgcore::{
-    kernel::{CommandEncoderExt, KernelDispatch},
-    re_exports::encase::StorageBuffer,
-};
+use wgcore::re_exports::encase::StorageBuffer;
 use wgsparkl3d::{
     models::{DruckerPrager, ElasticCoefficients},
     pipeline::{MpmData, MpmPipeline},
@@ -102,7 +97,7 @@ impl framework::Example for RenderWgSparkl {
          * Ground
          */
         let ground_size = 50.0;
-        let ground_height = 0.1;
+        let ground_height = 2.0;
 
         let rigid_body = RigidBodyBuilder::fixed().translation(vector![0.0, -ground_height, 0.0]);
         let ground_handle = rapier_data.bodies.insert(rigid_body);
@@ -111,12 +106,11 @@ impl framework::Example for RenderWgSparkl {
             .colliders
             .insert_with_parent(collider, ground_handle, &mut rapier_data.bodies);
 
-        let nxz = 45;
+        let nxz = 35;
         let cell_width = 1.0;
-        let sample_per_unit = 2f32;
         let mut particles = vec![];
         for i in 0..nxz {
-            for j in 0..100 {
+            for j in 0..15 {
                 for k in 0..nxz {
                     let position = vector![
                         i as f32 + 0.5 - nxz as f32 / 2.0,
@@ -145,7 +139,7 @@ impl framework::Example for RenderWgSparkl {
             &particles,
             &rapier_data.bodies,
             &rapier_data.colliders,
-            1f32 / sample_per_unit,
+            cell_width / 10f32,
             60_000,
         );
         Self {
@@ -167,10 +161,10 @@ impl framework::Example for RenderWgSparkl {
         line_strip_builder.reserve_strips(12800).unwrap();
         line_strip_builder.reserve_vertices(204800).unwrap();
 
-        run_simulation(re_ctx, self);
+        let point_draw_data = run_simulation(re_ctx, self);
         // debug render pipeline
         {
-            let mut line_batch = line_strip_builder.batch("lines");
+            let line_batch = line_strip_builder.batch("lines");
 
             let mut pipeline = RerunRenderPipeline {
                 line_batch_builder: line_batch,
@@ -191,7 +185,7 @@ impl framework::Example for RenderWgSparkl {
         Ok(vec![
             // 3D view
             {
-                let secs_since_startup = time.secs_since_startup();
+                let secs_since_startup = time.secs_since_startup() / 50f32;
                 let camera_rotation_center = glam::vec3(0f32, 20f32, 0f32);
                 let camera_position =
                     glam::vec3(secs_since_startup.sin(), 0.5, secs_since_startup.cos()) * 50f32
@@ -216,6 +210,7 @@ impl framework::Example for RenderWgSparkl {
                         ..Default::default()
                     },
                 );
+                view_builder.queue_draw(point_draw_data.clone());
                 let command_buffer = view_builder
                     .queue_draw(line_strip_draw_data)
                     .draw(re_ctx, re_renderer::Rgba::TRANSPARENT)
@@ -243,7 +238,7 @@ pub struct RerunRenderPipeline<'a, 'b> {
 impl<'a, 'b> DebugRenderBackend for RerunRenderPipeline<'a, 'b> {
     fn draw_line(
         &mut self,
-        object: DebugRenderObject,
+        _object: DebugRenderObject<'_>,
         a: Point<Real>,
         b: Point<Real>,
         color: DebugColor,
@@ -262,7 +257,7 @@ impl<'a, 'b> DebugRenderBackend for RerunRenderPipeline<'a, 'b> {
 }
 
 /// Inspired from wgsparkl testbed::step
-fn run_simulation(ctx: &RenderContext, physics: &mut RenderWgSparkl) {
+fn run_simulation(ctx: &RenderContext, physics: &mut RenderWgSparkl) -> PointCloudDrawData {
     // Run the simulation.
     let mut encoder = ctx.device.create_command_encoder(&Default::default());
 
@@ -289,7 +284,7 @@ fn run_simulation(ctx: &RenderContext, physics: &mut RenderWgSparkl) {
 
     //// Copy the velocities to the GPU.
 
-    let num_substeps = 1;
+    let num_substeps = 4;
     let divisor = num_substeps as f32; // app_state.num_substeps as f32;
     let gravity = Vector::y() * -9.81;
     let vels_data: Vec<_> = physics
@@ -305,7 +300,7 @@ fn run_simulation(ctx: &RenderContext, physics: &mut RenderWgSparkl) {
                         * (rb.is_dynamic() as u32 as f32)
                         / divisor,
                 #[allow(clippy::clone_on_copy)] // Needed for the 2d/3d switch.
-                angular: rb.angvel().clone(),
+                angular: rb.angvel().clone()* physics.rapier_data.integration_parameters.dt / divisor,
             }
         })
         .collect();
@@ -335,6 +330,43 @@ fn run_simulation(ctx: &RenderContext, physics: &mut RenderWgSparkl) {
 
     ctx.queue.submit(Some(encoder.finish()));
 
+    // Read to CPU implementation
+    // TODO: move that to GPU
+    let points = read_particles::read_particles_positions(
+        &ctx.device,
+        &ctx.queue,
+        &physics.mpm_data.particles,
+    )
+    .iter()
+    .map(|p| glam::vec3(p.x, p.y, p.z))
+    .collect::<Vec<_>>();
+    //dbg!(&points);
+    let mut point_cloud_builder = PointCloudBuilder::new(ctx);
+    point_cloud_builder
+        .batch("mpm particles point cloud")
+        .add_points(
+            &points,
+            &points
+                .iter()
+                .map(|_| Size::new_scene_units(0.2f32))
+                .collect::<Vec<_>>(),
+            &points
+                .iter()
+                .enumerate()
+                .map(|(i, _)| {
+                    Color32::from_rgb(
+                        (i * 5 % 255) as u8,
+                        (i * 7 % 255) as u8,
+                        (i * 11 % 255) as u8,
+                    )
+                })
+                .collect::<Vec<_>>(),
+            &[],
+        );
+    let point_draw_data = point_cloud_builder.into_draw_data().unwrap();
+
+    // end read to CPU + display.
+
     // FIXME: make the readback work on wasm too.
     //        Currently, this means there won’t be any two-ways coupling on wasm.
     #[cfg(not(target_arch = "wasm32"))]
@@ -363,22 +395,56 @@ fn run_simulation(ctx: &RenderContext, physics: &mut RenderWgSparkl) {
                 // println!("dvel: {:?}", vel.linvel - vel_before);
             }
         }
-        let mut params = physics.rapier_data.integration_parameters;
-        params.dt /= divisor;
-        physics.rapier_data.physics_pipeline.step(
-            &nalgebra::zero(),
-            &params, // physics.rapier_data.params,
-            &mut physics.rapier_data.islands,
-            &mut physics.rapier_data.broad_phase,
-            &mut physics.rapier_data.narrow_phase,
-            &mut physics.rapier_data.bodies,
-            &mut physics.rapier_data.colliders,
-            &mut physics.rapier_data.impulse_joints,
-            &mut physics.rapier_data.multibody_joints,
-            &mut physics.rapier_data.ccd_solver,
-            None,
-            &(),
-            &(),
+    }
+    let mut params = physics.rapier_data.integration_parameters;
+    params.dt /= divisor;
+    physics.rapier_data.physics_pipeline.step(
+        &nalgebra::zero(),
+        &params, // physics.rapier_data.params,
+        &mut physics.rapier_data.islands,
+        &mut physics.rapier_data.broad_phase,
+        &mut physics.rapier_data.narrow_phase,
+        &mut physics.rapier_data.bodies,
+        &mut physics.rapier_data.colliders,
+        &mut physics.rapier_data.impulse_joints,
+        &mut physics.rapier_data.multibody_joints,
+        &mut physics.rapier_data.ccd_solver,
+        None,
+        &(),
+        &(),
+    );
+    point_draw_data
+}
+
+pub mod read_particles {
+    use super::*;
+
+    use nalgebra::Vector4;
+    use wgcore::tensor::GpuVector;
+    use wgsparkl3d::solver::GpuParticles;
+
+    pub fn read_particles_positions(
+        device: &wgpu::Device,
+        queue: &wgpu::Queue,
+        particles: &GpuParticles,
+    ) -> Vec<Vector4<f32>> {
+        // Create the staging buffer.
+        // Here `particles` is of type `GpuParticles`, accessible from
+        // `PhysicsContext::data::particles`.
+        let positions_staging: GpuVector<Vector4<f32>> = GpuVector::uninit(
+            device,
+            particles.len() as u32,
+            wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::MAP_READ,
         );
+
+        // Copy the buffer.
+        let mut encoder = device.create_command_encoder(&Default::default());
+        positions_staging.copy_from(&mut encoder, &particles.positions);
+        queue.submit(Some(encoder.finish()));
+
+        // Run the copy. The fourth component of each entry can be ignored.
+        let positions: Vec<Vector4<f32>> =
+            futures::executor::block_on(positions_staging.read(device)).unwrap();
+        positions
     }
 }
