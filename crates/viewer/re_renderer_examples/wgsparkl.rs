@@ -3,6 +3,7 @@
 // TODO(#6330): remove unwrap()
 #![allow(clippy::unwrap_used)]
 
+use core::num;
 use std::sync::Arc;
 
 use bytemuck::{Pod, Zeroable};
@@ -50,6 +51,7 @@ struct RenderWgSparkl {
     pub render_pipeline: DebugRenderPipeline,
     pub mpm_data: MpmData,
     pub mpm_pipeline: MpmPipeline,
+    pub num_substeps: usize,
 }
 
 #[derive(Clone)]
@@ -106,11 +108,11 @@ impl framework::Example for RenderWgSparkl {
             .colliders
             .insert_with_parent(collider, ground_handle, &mut rapier_data.bodies);
 
-        let nxz = 35;
+        let nxz = 45;
         let cell_width = 1.0;
         let mut particles = vec![];
         for i in 0..nxz {
-            for j in 0..15 {
+            for j in 0..100 {
                 for k in 0..nxz {
                     let position = vector![
                         i as f32 + 0.5 - nxz as f32 / 2.0,
@@ -130,16 +132,17 @@ impl framework::Example for RenderWgSparkl {
                 }
             }
         }
+        let num_substeps = 20;
         let mpm_data = MpmData::new(
             &re_ctx.device,
             SimulationParams {
-                dt: 1.0 / 60.0,
+                dt: (1.0 / 60.0) / num_substeps as f32,
                 gravity: Vector3::new(0.0, -9.81, 0.0),
             },
             &particles,
             &rapier_data.bodies,
             &rapier_data.colliders,
-            cell_width / 10f32,
+            cell_width,
             60_000,
         );
         Self {
@@ -147,6 +150,7 @@ impl framework::Example for RenderWgSparkl {
             render_pipeline: DebugRenderPipeline::default(),
             mpm_data,
             mpm_pipeline: pipeline,
+            num_substeps,
         }
     }
 
@@ -284,8 +288,7 @@ fn run_simulation(ctx: &RenderContext, physics: &mut RenderWgSparkl) -> PointClo
 
     //// Copy the velocities to the GPU.
 
-    let num_substeps = 4;
-    let divisor = num_substeps as f32; // app_state.num_substeps as f32;
+    let divisor = physics.num_substeps as f32; // app_state.num_substeps as f32;
     let gravity = Vector::y() * -9.81;
     let vels_data: Vec<_> = physics
         .mpm_data
@@ -312,7 +315,7 @@ fn run_simulation(ctx: &RenderContext, physics: &mut RenderWgSparkl) -> PointClo
         .write_buffer(physics.mpm_data.bodies.vels().buffer(), 0, &vels_bytes);
 
     //// Step the simulation.
-    for _ in 0..num_substeps {
+    for _ in 0..physics.num_substeps {
         physics
             .mpm_pipeline
             .dispatch_step(&ctx.device, &mut encoder, &mut physics.mpm_data, None);
