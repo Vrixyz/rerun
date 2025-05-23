@@ -762,3 +762,16 @@ egui_commonmark = { git = "https://github.com/rerun-io/egui_commonmark.git", bra
 # walkers = { git = "https://github.com/rerun-io/walkers", rev = "8939cceb3fa49ca8648ee16fe1d8432f5ab0bdcc" } # https://github.com/podusowski/walkers/pull/222
 
 # dav1d = { path = "/home/cmc/dev/rerun-io/rav1d", package = "re_rav1d", version = "0.1.1" }
+
+parry2d = { git = "https://github.com/dimforge/parry.git", rev = "407fb449504dde7ba0a3d80a8de7e37ac991a77a" }
+parry3d = { git = "https://github.com/dimforge/parry.git", rev = "407fb449504dde7ba0a3d80a8de7e37ac991a77a" }
+encase = { git = "https://github.com/sebcrozet/encase.git", rev = "6755c1414c225cbeac9fde1ff9394b70d3b05404" }
+wgcore = { git = "https://github.com/dimforge/wgmath.git", rev = "25bbd3d5a680f916d1f8e34a4394d1d9e80c07a7" }
+wgcore-derive = { git = "https://github.com/dimforge/wgmath.git", rev = "25bbd3d5a680f916d1f8e34a4394d1d9e80c07a7" }
+wgebra = { git = "https://github.com/dimforge/wgmath.git", rev = "25bbd3d5a680f916d1f8e34a4394d1d9e80c07a7" }
+wgparry3d = { git = "https://github.com/dimforge/wgmath.git", rev = "25bbd3d5a680f916d1f8e34a4394d1d9e80c07a7" }
+wgparry2d = { git = "https://github.com/dimforge/wgmath.git", rev = "25bbd3d5a680f916d1f8e34a4394d1d9e80c07a7" }
+wgrapier3d = { git = "https://github.com/dimforge/wgmath.git", rev = "25bbd3d5a680f916d1f8e34a4394d1d9e80c07a7" }
+wgrapier2d = { git = "https://github.com/dimforge/wgmath.git", rev = "25bbd3d5a680f916d1f8e34a4394d1d9e80c07a7" }
+# encase = { git = "https://github.com/sebcrozet/encase", branch = "nalgebra-points" }
+naga_oil = { git = "https://github.com/bevyengine/naga_oil", rev = "06844280b56bc02e0ac9ad088cf6aa81b8be92fd" }

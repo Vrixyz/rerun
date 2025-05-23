@@ -13,8 +13,16 @@ workspace = true
 [features]
 
 [[bin]]
-name = "2d"    # NOLINT
+name = "2d" # NOLINT
 path = "2d.rs" # NOLINT
+
+[[bin]]
+name = "wgsparkl"
+path = "wgsparkl.rs"
+
+[[bin]]
+name = "mesh"
+path = "mesh.rs"
 
 [[bin]]
 name = "depth_cloud"
@@ -61,6 +69,11 @@ winit = { workspace = true, default-features = false, features = [
   "wayland",
   "wayland-dlopen",
 ] }
+rapier3d = { version = "0.23", features = ["debug-render"] }
+wgsparkl3d = { path = "../../../../wgsparkl/crates/wgsparkl3d" }
+wgcore = { version = "0.2" }
+futures = "0.3"
+nalgebra = { version = "0.33", features = ["glam028"] }
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 console_error_panic_hook.workspace = true
