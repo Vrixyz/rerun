@@ -20,9 +20,12 @@ use re_renderer::{
 use rapier3d::pipeline::{DebugColor, DebugRenderBackend, DebugRenderObject, DebugRenderPipeline};
 use rapier3d::prelude::*;
 
-use wgpu::Buffer;
+use wgpu::{Buffer, Features};
 
-use wgcore::re_exports::encase::StorageBuffer;
+use wgcore::{
+    re_exports::encase::StorageBuffer,
+    timestamps::{self, GpuTimestamps},
+};
 use wgsparkl3d::{
     models::{DruckerPrager, ElasticCoefficients},
     pipeline::{MpmData, MpmPipeline},
@@ -55,6 +58,42 @@ struct RenderWgSparkl {
     pub mpm_pipeline: MpmPipeline,
     pub num_substeps: usize,
     pub mesh_instances: Vec<GpuMeshInstance>,
+    pub timestamps: Timestamps,
+}
+
+#[derive(Default)]
+pub struct Timestamps {
+    pub timestamps: Option<GpuTimestamps>,
+    pub values: TimestampsValues,
+}
+
+#[derive(Default, Debug)]
+pub struct TimestampsValues {
+    pub update_rigid_particles: f64,
+    pub grid_sort: f64,
+    pub grid_update_cdf: f64,
+    pub p2g_cdf: f64,
+    pub g2p_cdf: f64,
+    pub p2g: f64,
+    pub grid_update: f64,
+    pub g2p: f64,
+    pub particles_update: f64,
+    pub integrate_bodies: f64,
+}
+
+impl TimestampsValues {
+    pub fn total_time(&self) -> f64 {
+        self.update_rigid_particles
+            + self.grid_sort
+            + self.grid_update_cdf
+            + self.p2g_cdf
+            + self.g2p_cdf
+            + self.p2g
+            + self.grid_update
+            + self.g2p
+            + self.particles_update
+            + self.integrate_bodies
+    }
 }
 
 #[derive(Clone)]
@@ -97,7 +136,10 @@ impl framework::Example for RenderWgSparkl {
             ccd_solver: CCDSolver::new(),
             islands: IslandManager::new(),
         };
-
+        let features = re_ctx.device.features();
+        let timestamps = features
+            .contains(Features::TIMESTAMP_QUERY)
+            .then(|| GpuTimestamps::new(&re_ctx.device, 512));
         /*
          * Ground
          */
@@ -202,6 +244,10 @@ impl framework::Example for RenderWgSparkl {
                 additive_tint: Color32::WHITE,
                 outline_mask_ids: Default::default(),
             }],
+            timestamps: Timestamps {
+                timestamps,
+                ..Default::default()
+            },
         }
     }
 
@@ -265,6 +311,7 @@ impl framework::Example for RenderWgSparkl {
                         ..Default::default()
                     },
                 );
+
                 view_builder.queue_draw(re_renderer::renderer::MeshDrawData::new(
                     re_ctx,
                     &self.mesh_instances,
@@ -274,6 +321,7 @@ impl framework::Example for RenderWgSparkl {
                     .queue_draw(line_strip_draw_data)
                     .draw(re_ctx, re_renderer::Rgba::TRANSPARENT)
                     .unwrap();
+
                 framework::ViewDrawResult {
                     view_builder,
                     command_buffer,
@@ -371,15 +419,21 @@ fn run_simulation(ctx: &RenderContext, physics: &mut RenderWgSparkl) -> PointClo
 
     //// Step the simulation.
     for _ in 0..physics.num_substeps {
-        physics
-            .mpm_pipeline
-            .dispatch_step(&ctx.device, &mut encoder, &mut physics.mpm_data, None);
+        physics.mpm_pipeline.dispatch_step(
+            &ctx.device,
+            &mut encoder,
+            &mut physics.mpm_data,
+            physics.timestamps.timestamps.as_mut(),
+        );
     }
     physics
         .mpm_data
         .poses_staging
         .copy_from(&mut encoder, physics.mpm_data.bodies.poses());
 
+    if let Some(t) = physics.timestamps.timestamps.as_mut() {
+        t.resolve(&mut encoder)
+    }
     // TODO: timings
     // TODO: rendering vertex buffer preparation
     // - ideally this should be made in GPU be reading the same particle buffer.
@@ -471,6 +525,40 @@ fn run_simulation(ctx: &RenderContext, physics: &mut RenderWgSparkl) -> PointClo
         &(),
         &(),
     );
+    // Handle timestamps
+    if let Some(timestamps_taken) = physics.timestamps.timestamps.take() {
+        let timestamp_period = ctx.queue.get_timestamp_period();
+        let num_substeps = physics.num_substeps;
+        // FIXME: this should be asynchroneous through `wait_for_results_async`
+        let values = timestamps_taken.wait_for_results(&ctx.device);
+        let timestamps_ms = GpuTimestamps::timestamps_to_ms(&values, timestamp_period);
+        let mut new_timings = Timestamps {
+            timestamps: Some(timestamps_taken),
+            ..Default::default()
+        };
+
+        for i in 0..num_substeps {
+            let mut timings = [
+                &mut new_timings.values.update_rigid_particles,
+                &mut new_timings.values.grid_sort,
+                &mut new_timings.values.grid_update_cdf,
+                &mut new_timings.values.p2g_cdf,
+                &mut new_timings.values.g2p_cdf,
+                &mut new_timings.values.p2g,
+                &mut new_timings.values.grid_update,
+                &mut new_timings.values.g2p,
+                &mut new_timings.values.particles_update,
+                &mut new_timings.values.integrate_bodies,
+            ];
+            let times = &timestamps_ms[i * timings.len() * 2..];
+
+            for (k, timing) in timings.iter_mut().enumerate() {
+                **timing += times[k * 2 + 1] - times[k * 2];
+            }
+        }
+        //dbg!(&new_timings.values);
+        physics.timestamps = new_timings;
+    }
     point_draw_data
 }
 

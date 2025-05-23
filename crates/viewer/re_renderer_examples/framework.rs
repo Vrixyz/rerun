@@ -7,9 +7,7 @@ use std::sync::Arc;
 use anyhow::Context as _;
 use web_time::Instant;
 
-use re_renderer::{
-    RenderConfig, RenderContext, device_caps::DeviceCaps, view_builder::ViewBuilder,
-};
+use re_renderer::{RenderConfig, RenderContext, view_builder::ViewBuilder};
 
 use winit::{
     application::ApplicationHandler,
@@ -130,8 +128,8 @@ impl<E: Example + 'static> Application<E> {
         let (device, queue) = adapter
             .request_device(&wgpu::DeviceDescriptor {
                 label: None,
-                required_features: wgpu::Features::empty(),
-                required_limits: dbg!(wgpu::Limits::default()),
+                required_features: wgpu::Features::TIMESTAMP_QUERY,
+                required_limits: wgpu::Limits::default(),
                 memory_hints: Default::default(),
                 trace: wgpu::Trace::Off,
             })
