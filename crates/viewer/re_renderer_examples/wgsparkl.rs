@@ -3,12 +3,18 @@
 // TODO(#6330): remove unwrap()
 #![allow(clippy::unwrap_used)]
 
-use core::num;
+pub mod instancing3d;
+pub mod point_cloud_renderer_wgsparkl;
+pub mod prep_vertex_buffer;
+
 use std::sync::Arc;
 
 use bytemuck::{Pod, Zeroable};
 use glam::{UVec3, Vec2, Vec3, Vec4};
+use graphics::InstanceMaterialData;
+use instancing3d::create_render_pipeline;
 use nalgebra::Vector3;
+use prep_vertex_buffer::{GpuRenderConfig, RenderConfig, RenderMode, WgPrepVertexBuffer};
 use re_renderer::{
     Color32, DebugLabel, LineBatchBuilder, LineDrawableBuilder, PickingLayerId, PointCloudBuilder,
     RenderContext, Rgba32Unmul, Size,
@@ -20,9 +26,11 @@ use re_renderer::{
 use rapier3d::pipeline::{DebugColor, DebugRenderBackend, DebugRenderObject, DebugRenderPipeline};
 use rapier3d::prelude::*;
 
-use wgpu::{Buffer, Features};
+use wgpu::{Buffer, Features, RenderPipeline};
 
 use wgcore::{
+    Shader,
+    kernel::CommandEncoderExt,
     re_exports::encase::StorageBuffer,
     timestamps::{self, GpuTimestamps},
 };
@@ -53,12 +61,15 @@ pub struct RapierData {
 
 struct RenderWgSparkl {
     pub rapier_data: RapierData,
-    pub render_pipeline: DebugRenderPipeline,
+    pub debug_render_pipeline: DebugRenderPipeline,
     pub mpm_data: MpmData,
     pub mpm_pipeline: MpmPipeline,
     pub num_substeps: usize,
     pub mesh_instances: Vec<GpuMeshInstance>,
     pub timestamps: Timestamps,
+    /// TODO: regroup [`Self::particles_visual_instances`] and [`Self::prep_vertex_buffer`] in a single graphics option field.
+    pub particles_visual_instances: Option<InstanceMaterialData>,
+    pub prep_vertex_buffer: WgPrepVertexBuffer,
 }
 
 #[derive(Default)]
@@ -94,17 +105,6 @@ impl TimestampsValues {
             + self.particles_update
             + self.integrate_bodies
     }
-}
-
-#[derive(Clone)]
-pub struct InstanceMaterialData {
-    pub data: Vec<InstanceData>,
-    pub buffer: InstanceBuffer,
-}
-#[derive(Clone)]
-pub struct InstanceBuffer {
-    pub buffer: Arc<Buffer>,
-    pub length: usize,
 }
 
 #[derive(Clone, Copy, Pod, Zeroable, Default)]
@@ -229,7 +229,7 @@ impl framework::Example for RenderWgSparkl {
         );
         Self {
             rapier_data,
-            render_pipeline: DebugRenderPipeline::default(),
+            debug_render_pipeline: DebugRenderPipeline::default(),
             mpm_data,
             mpm_pipeline: pipeline,
             num_substeps,
@@ -248,6 +248,11 @@ impl framework::Example for RenderWgSparkl {
                 timestamps,
                 ..Default::default()
             },
+            particles_visual_instances: Some(graphics::init_particles_graphics(
+                &re_ctx.device,
+                &particles,
+            )),
+            prep_vertex_buffer: WgPrepVertexBuffer::from_device(&re_ctx.device).unwrap(),
         }
     }
 
@@ -271,7 +276,7 @@ impl framework::Example for RenderWgSparkl {
                 line_batch_builder: line_batch,
             };
 
-            self.render_pipeline.render(
+            self.debug_render_pipeline.render(
                 &mut pipeline,
                 &self.rapier_data.bodies,
                 &self.rapier_data.colliders,
@@ -312,16 +317,24 @@ impl framework::Example for RenderWgSparkl {
                     },
                 );
 
-                view_builder.queue_draw(re_renderer::renderer::MeshDrawData::new(
-                    re_ctx,
-                    &self.mesh_instances,
-                )?);
-                view_builder.queue_draw(point_draw_data.clone());
+                // debug render pipeline
                 let command_buffer = view_builder
                     .queue_draw(line_strip_draw_data)
                     .draw(re_ctx, re_renderer::Rgba::TRANSPARENT)
                     .unwrap();
 
+                // Draw the ground mesh from CPU.
+                view_builder.queue_draw(re_renderer::renderer::MeshDrawData::new(
+                    re_ctx,
+                    &self.mesh_instances,
+                )?);
+
+                // Draw the point cloud.
+
+                view_builder.queue_draw(point_cloud_renderer_wgsparkl::PointCloudDrawData::new(
+                    re_ctx,
+                    &self.mesh_instances,
+                )?);
                 framework::ViewDrawResult {
                     view_builder,
                     command_buffer,
@@ -364,7 +377,7 @@ impl<'a, 'b> DebugRenderBackend for RerunRenderPipeline<'a, 'b> {
 }
 
 /// Inspired from wgsparkl testbed::step
-fn run_simulation(ctx: &RenderContext, physics: &mut RenderWgSparkl) -> PointCloudDrawData {
+fn run_simulation(ctx: &RenderContext, physics: &mut RenderWgSparkl) {
     // Run the simulation.
     let mut encoder = ctx.device.create_command_encoder(&Default::default());
 
@@ -440,42 +453,28 @@ fn run_simulation(ctx: &RenderContext, physics: &mut RenderWgSparkl) -> PointClo
     // - A "simpler" (more easily debuggable) solution is to read the particle buffer (from MpmData::GpuPraticles), then dispatch a cloud point render.
     //    - This will enable to test current logic before implementing more complex shaders.
 
-    ctx.queue.submit(Some(encoder.finish()));
+    // Prepare the vertex buffer for rendering the particles.
+    if let Some(particles_visual_instances) = physics.particles_visual_instances.as_ref() {
+        let mut pass =
+            encoder.compute_pass("prep_vertex_buffer", physics.timestamps.timestamps.as_mut());
 
-    // Read to CPU implementation
-    // TODO: move that to GPU
-    let points = read_particles::read_particles_positions(
-        &ctx.device,
-        &ctx.queue,
-        &physics.mpm_data.particles,
-    )
-    .iter()
-    .map(|p| glam::vec3(p.x, p.y, p.z))
-    .collect::<Vec<_>>();
-    //dbg!(&points);
-    let mut point_cloud_builder = PointCloudBuilder::new(ctx);
-    point_cloud_builder
-        .batch("mpm particles point cloud")
-        .add_points(
-            &points,
-            &points
-                .iter()
-                .map(|_| Size::new_scene_units(0.2f32))
-                .collect::<Vec<_>>(),
-            &points
-                .iter()
-                .enumerate()
-                .map(|(i, _)| {
-                    Color32::from_rgb(
-                        (i * 5 % 255) as u8,
-                        (i * 7 % 255) as u8,
-                        (i * 11 % 255) as u8,
-                    )
-                })
-                .collect::<Vec<_>>(),
-            &[],
+        // FIXME: do not reallocate the buffer at each step.
+        let render_config = RenderConfig::new(RenderMode::Velocity);
+        let gpu_render_config = GpuRenderConfig::new(&ctx.device, render_config);
+        physics.prep_vertex_buffer.dispatch(
+            &ctx.device,
+            &mut pass,
+            &gpu_render_config,
+            &physics.mpm_data.particles,
+            &physics.mpm_data.rigid_particles,
+            &physics.mpm_data.grid,
+            &physics.mpm_data.sim_params,
+            &particles_visual_instances.buffer.buffer,
+            None, // rigid_particles.single().ok().map(|b| &**b.buffer.buffer),
         );
-    let point_draw_data = point_cloud_builder.into_draw_data().unwrap();
+    }
+
+    ctx.queue.submit(Some(encoder.finish()));
 
     // end read to CPU + display.
 
@@ -526,6 +525,8 @@ fn run_simulation(ctx: &RenderContext, physics: &mut RenderWgSparkl) -> PointClo
         &(),
     );
     // Handle timestamps
+    // FIXME: We can't enable this while the implementation is blocking.
+    #[cfg(not(target_arch = "wasm32"))]
     if let Some(timestamps_taken) = physics.timestamps.timestamps.take() {
         let timestamp_period = ctx.queue.get_timestamp_period();
         let num_substeps = physics.num_substeps;
@@ -556,10 +557,9 @@ fn run_simulation(ctx: &RenderContext, physics: &mut RenderWgSparkl) -> PointClo
                 **timing += times[k * 2 + 1] - times[k * 2];
             }
         }
-        //dbg!(&new_timings.values);
+        dbg!(&new_timings.values);
         physics.timestamps = new_timings;
     }
-    point_draw_data
 }
 
 pub mod read_particles {
@@ -569,14 +569,13 @@ pub mod read_particles {
     use wgcore::tensor::GpuVector;
     use wgsparkl3d::solver::GpuParticles;
 
+    /// Gets data from a [`MpmData::particles`].
     pub fn read_particles_positions(
         device: &wgpu::Device,
         queue: &wgpu::Queue,
         particles: &GpuParticles,
     ) -> Vec<Vector4<f32>> {
         // Create the staging buffer.
-        // Here `particles` is of type `GpuParticles`, accessible from
-        // `PhysicsContext::data::particles`.
         let positions_staging: GpuVector<Vector4<f32>> = GpuVector::uninit(
             device,
             particles.len() as u32,
@@ -636,4 +635,75 @@ pub fn duplicate_vertices_and_compute_normals(
         }
     }
     mesh_data
+}
+
+pub mod graphics {
+    use wgcore::tensor::GpuVector;
+    use wgpu::BufferUsages;
+
+    use super::*;
+    #[derive(Clone)]
+    pub struct InstanceMaterialData {
+        pub data: Vec<InstanceData>,
+        pub buffer: InstanceBuffer,
+    }
+    #[derive(Clone)]
+    pub struct InstanceBuffer {
+        pub buffer: Arc<Buffer>,
+        pub length: usize,
+    }
+
+    pub fn init_particles_graphics(
+        device: &wgpu::Device,
+        particles: &[Particle],
+    ) -> InstanceMaterialData {
+        let colors = [
+            [124, 144, 255],
+            [8, 144, 255],
+            [124, 7, 255],
+            [124, 144, 7],
+            [200, 37, 255],
+            [124, 230, 25],
+        ]
+        .map(|c| {
+            [
+                c[0] as f32 / 255.0,
+                c[1] as f32 / 255.0,
+                c[2] as f32 / 255.0,
+                1.0,
+            ]
+        });
+        let mut instances = vec![];
+        for (rb_id, particle) in particles.iter().enumerate() {
+            let base_color = colors[rb_id % colors.len()];
+            instances.push(InstanceData {
+                deformation: [Vec4::X, Vec4::Y, Vec4::Z],
+                //#[cfg(feature = "dim2")]
+                //position: Vec4::new(particle.position.x, particle.position.y, 0.0, 0.0),
+                //#[cfg(feature = "dim3")]
+                position: Vec4::new(
+                    particle.position.x,
+                    particle.position.y,
+                    particle.position.z,
+                    0.0,
+                ),
+                base_color,
+                color: base_color,
+            });
+        }
+
+        let instances_buffer = GpuVector::init(
+            device,
+            &instances,
+            BufferUsages::STORAGE | BufferUsages::VERTEX,
+        );
+        let num_instances = instances.len();
+        InstanceMaterialData {
+            data: instances,
+            buffer: InstanceBuffer {
+                buffer: Arc::new(instances_buffer.into_inner().into()),
+                length: num_instances,
+            },
+        }
+    }
 }

@@ -21,6 +21,10 @@ name = "wgsparkl"
 path = "wgsparkl.rs"
 
 [[bin]]
+name = "rapier"
+path = "rapier.rs"
+
+[[bin]]
 name = "mesh"
 path = "mesh.rs"
 
@@ -72,8 +76,10 @@ winit = { workspace = true, default-features = false, features = [
 rapier3d = { version = "0.23", features = ["debug-render"] }
 wgsparkl3d = { path = "../../../../wgsparkl/crates/wgsparkl3d" }
 wgcore = { version = "0.2" }
+wgebra = { version = "0.2" }
 futures = "0.3"
 nalgebra = { version = "0.33", features = ["glam028"] }
+getrandom = { version = "0.2", features = ["js"] }
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 console_error_panic_hook.workspace = true
