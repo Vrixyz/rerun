@@ -3,6 +3,7 @@ use smallvec::SmallVec;
 use crate::{RenderContext, debug_label::DebugLabel};
 
 use super::{
+    PipelineLayoutDesc,
     pipeline_layout_pool::{GpuPipelineLayoutHandle, GpuPipelineLayoutPool},
     resource::PoolError,
     shader_module_pool::{GpuShaderModuleHandle, GpuShaderModulePool},

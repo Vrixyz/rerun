@@ -466,9 +466,9 @@ impl AppState {
                         ui,
                         PanelState::Expanded,
                         // Give the blueprint time panel a distinct color from the normal time panel:
-                        ui.design_tokens()
+                        ui.tokens()
                             .bottom_panel_frame()
-                            .fill(ui.design_tokens().blueprint_time_panel_bg_fill()),
+                            .fill(ui.tokens().blueprint_time_panel_bg_fill),
                     );
 
                     {
@@ -506,7 +506,7 @@ impl AppState {
                         ctx.rec_cfg,
                         ui,
                         app_blueprint.time_panel_state(),
-                        ui.design_tokens().bottom_panel_frame(),
+                        ui.tokens().bottom_panel_frame(),
                     );
                 }
 
@@ -890,17 +890,16 @@ fn check_for_clicked_hyperlinks(
         o.commands.retain_mut(|command| {
             if let egui::OutputCommand::OpenUrl(open_url) = command {
                 if let Ok(uri) = open_url.url.parse::<re_uri::RedapUri>() {
-                    let is_dataset_uri = matches!(uri, re_uri::RedapUri::DatasetData { .. });
-
                     command_sender.send_system(SystemCommand::LoadDataSource(
-                        re_data_source::DataSource::RerunGrpcStream(uri),
+                        re_data_source::DataSource::RerunGrpcStream {
+                            uri,
+                            select_when_loaded: !open_url.new_tab,
+                        },
                     ));
 
-                    if is_dataset_uri && !open_url.new_tab {
-                        command_sender.send_system(SystemCommand::ChangeDisplayMode(
-                            DisplayMode::LocalRecordings,
-                        ));
-                    }
+                    // NOTE: we do NOT change the display mode here.
+                    // Instead we rely on `select_when_loaded` to trigger the selection… once the data is loaded.
+
                     return false;
                 } else if let Some(path_str) = open_url.url.strip_prefix(recording_scheme) {
                     recording_path = Some(path_str.to_owned());

@@ -7,6 +7,7 @@ use super::{
 
 slotmap::new_key_type! { pub struct GpuPipelineLayoutHandle; }
 
+/// Wrapper to make [`wgpu::PipelineLayout`] Hashable and comparable
 #[derive(Debug, Clone, Hash, PartialEq, Eq)]
 pub struct PipelineLayoutDesc {
     /// Debug label of the pipeline layout. This will show up in graphics debuggers for easy identification.
