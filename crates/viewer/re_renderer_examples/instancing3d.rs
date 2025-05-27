@@ -1,4 +1,7 @@
-use wgpu::{RenderPipeline, VertexBufferLayout};
+use re_renderer::{
+    BindGroupLayoutDesc, GpuPipelineLayoutHandle, PipelineLayoutDesc, RenderContext,
+};
+use wgpu::{PipelineLayout, RenderPipeline, VertexBufferLayout};
 
 use crate::InstanceData;
 
@@ -15,12 +18,7 @@ const INSTANCE_ATTRIBUTES: [wgpu::VertexAttribute; 9] = wgpu::vertex_attr_array!
     8 => Float32x4, // i_color
 ];
 
-pub struct SimpleShader {
-    pub render_pipeline: RenderPipeline,
-    pub
-}
-
-pub fn get_layout() -> VertexBufferLayout {
+pub fn get_layout() -> VertexBufferLayout<'static> {
     VertexBufferLayout {
         array_stride: std::mem::size_of::<InstanceData>() as wgpu::BufferAddress,
         step_mode: wgpu::VertexStepMode::Instance,
@@ -35,32 +33,79 @@ pub fn load_shader_module(device: &wgpu::Device) -> wgpu::ShaderModule {
     })
 }
 
-pub fn get_pipeline_layout(
-    device: &wgpu::Device,
-) -> wgpu::PipelineLayout {
-    let camera_bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-        entries: &[wgpu::BindGroupLayoutEntry {
-            binding: 0,
-            visibility: wgpu::ShaderStages::VERTEX,
-            ty: wgpu::BindingType::Buffer {
-                ty: wgpu::BufferBindingType::Uniform,
-                has_dynamic_offset: false,
-                min_binding_size: None,
-            },
-            count: None,
-        }],
-        label: Some("camera_bind_group_layout"),
-    });
+pub fn get_pipeline_layout(device: &wgpu::Device) -> wgpu::PipelineLayout {
+    let camera_bind_group_layout =
+        device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+            entries: &[wgpu::BindGroupLayoutEntry {
+                binding: 0,
+                visibility: wgpu::ShaderStages::VERTEX,
+                ty: wgpu::BindingType::Buffer {
+                    ty: wgpu::BufferBindingType::Uniform,
+                    has_dynamic_offset: false,
+                    min_binding_size: None,
+                },
+                count: None,
+            }],
+            label: Some("camera_bind_group_layout"),
+        });
     device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
         label: Some("PointCloudPipelineLayout"),
         bind_group_layouts: &[&camera_bind_group_layout],
         push_constant_ranges: &[],
     })
 }
+pub fn get_pipeline_layout_rerun(ctx: &RenderContext) -> GpuPipelineLayoutHandle {
+    let bind_group_layout = ctx.gpu_resources.bind_group_layouts.get_or_create(
+        &ctx.device,
+        &BindGroupLayoutDesc {
+            label: "DepthCopyWorkaround::render_pipeline".into(),
+            entries: vec![wgpu::BindGroupLayoutEntry {
+                binding: 0,
+                visibility: wgpu::ShaderStages::VERTEX,
+                ty: wgpu::BindingType::Buffer {
+                    ty: wgpu::BufferBindingType::Uniform,
+                    has_dynamic_offset: false,
+                    min_binding_size: None,
+                },
+                count: None,
+            }],
+        },
+    );
 
-pub fn create_render_pipeline(
-    device: &wgpu::Device,
-) -> RenderPipeline {
+    ctx.gpu_resources.pipeline_layouts.get_or_create(
+        ctx,
+        &PipelineLayoutDesc {
+            label: "DepthCopyWorkaround::render_pipeline".into(),
+            entries: vec![ctx.global_bindings.layout, bind_group_layout],
+        },
+    );
+    let vertex_bind_group_layout = ctx.gpu_resources.bind_group_layouts.get_or_create(
+        &ctx.device,
+        &BindGroupLayoutDesc {
+            label: "vertex_bind_group_layout".into(),
+            entries: vec![wgpu::BindGroupLayoutEntry {
+                binding: 0,
+                visibility: wgpu::ShaderStages::VERTEX,
+                ty: wgpu::BindingType::Buffer {
+                    ty: wgpu::BufferBindingType::Uniform,
+                    has_dynamic_offset: false,
+                    min_binding_size: None,
+                },
+                count: None,
+            }],
+        },
+    );
+
+    ctx.gpu_resources.pipeline_layouts.get_or_create(
+        ctx,
+        &PipelineLayoutDesc {
+            label: "PointCloudPipelineLayout".into(),
+            entries: vec![ctx.global_bindings.layout, vertex_bind_group_layout],
+        },
+    )
+}
+
+pub fn create_render_pipeline(device: &wgpu::Device) -> RenderPipeline {
     let shader_module = load_shader_module(device);
     let surface_format = wgpu::TextureFormat::Bgra8UnormSrgb;
     let pipeline_layout = get_pipeline_layout(device);
@@ -70,17 +115,19 @@ pub fn create_render_pipeline(
         layout: Some(&pipeline_layout),
         vertex: wgpu::VertexState {
             module: &shader_module,
-            entry_point: "vertex",
+            entry_point: Some("vertex"),
             buffers: &[instance_buffer_layout],
+            compilation_options: wgpu::PipelineCompilationOptions::default(),
         },
         fragment: Some(wgpu::FragmentState {
             module: &shader_module,
-            entry_point: "fragment",
+            entry_point: Some("fragment"),
             targets: &[Some(wgpu::ColorTargetState {
                 format: surface_format,
                 blend: Some(wgpu::BlendState::REPLACE),
                 write_mask: wgpu::ColorWrites::ALL,
             })],
+            compilation_options: wgpu::PipelineCompilationOptions::default(),
         }),
         primitive: wgpu::PrimitiveState {
             topology: wgpu::PrimitiveTopology::PointList,
@@ -96,5 +143,6 @@ pub fn create_render_pipeline(
             alpha_to_coverage_enabled: false,
         },
         multiview: None,
+        cache: None,
     })
 }

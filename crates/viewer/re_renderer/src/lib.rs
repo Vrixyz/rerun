@@ -83,7 +83,7 @@ pub use transform::RectTransform;
 pub use view_builder::ViewBuilder;
 pub use wgpu_resources::{
     BindGroupDesc, BindGroupLayoutDesc, GpuBindGroup, GpuBindGroupLayoutHandle,
-    GpuPipelineLayoutPool, GpuRenderPipelineHandle, GpuRenderPipelinePool,
+    GpuPipelineLayoutHandle, GpuPipelineLayoutPool, GpuRenderPipelineHandle, GpuRenderPipelinePool,
     GpuRenderPipelinePoolAccessor, GpuShaderModuleHandle, GpuShaderModulePool, PipelineLayoutDesc,
     RenderPipelineDesc, ShaderModuleDesc, VertexBufferLayout, WgpuResourcePoolStatistics,
 };

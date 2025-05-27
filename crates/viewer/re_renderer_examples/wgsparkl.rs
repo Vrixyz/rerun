@@ -331,10 +331,14 @@ impl framework::Example for RenderWgSparkl {
 
                 // Draw the point cloud.
 
-                view_builder.queue_draw(point_cloud_renderer_wgsparkl::PointCloudDrawData::new(
-                    re_ctx,
-                    &self.mesh_instances,
-                )?);
+                if let Some(particles_visual_instances) = self.particles_visual_instances.as_ref() {
+                    view_builder.queue_draw(
+                        point_cloud_renderer_wgsparkl::PointCloudDrawData::new(
+                            particles_visual_instances.buffer.clone(),
+                        )
+                        .unwrap(),
+                    );
+                }
                 framework::ViewDrawResult {
                     view_builder,
                     command_buffer,
